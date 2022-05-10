@@ -5,7 +5,7 @@ import store from "./store.js";
 const goToChatPage = () => {
   // introduction page box -> invisible
   const introductionPage = document.querySelector(".introduction_page");
-  introductionPage.classList.add("dispaly_none");
+  introductionPage.classList.add("display_none");
 
   // chat_page -> visible
   const chatPage = document.querySelector(".chat_page");
@@ -17,6 +17,7 @@ const goToChatPage = () => {
   userLabel.innerHTML = username;
 
   createGroupChatbox();
+  createRoomChatbox();
 };
 
 const chatboxId = "group-chat-chatbox";
@@ -65,7 +66,6 @@ const appendGroupChatMessage = (data) => {
 
 const updateActiveChatboxes = (data) => {
   const { connectedPeers } = data;
-  //1 2 3
 
   const userSocketId = store.getSocketId();
 
@@ -74,7 +74,6 @@ const updateActiveChatboxes = (data) => {
     const activeChatbox = activeChatboxes.find(
       (chatbox) => peer.socketId === chatbox.socketId
     );
-
     if (!activeChatbox && peer.socketId !== userSocketId) {
       createNewUserChatbox(peer);
     }
@@ -82,7 +81,6 @@ const updateActiveChatboxes = (data) => {
 };
 
 const createNewUserChatbox = (peer) => {
-  console.log(peer);
   const chatboxId = peer.socketId;
   const chatboxMessagesId = `${peer.socketId}-messages`;
   const chatboxInputId = `${peer.socketId}-input`;
@@ -129,9 +127,97 @@ const createNewUserChatbox = (peer) => {
   store.setActiveChatboxes(newActiveChatboxes);
 };
 
+const appendDirectChatMessage = (messageData) => {
+  const { authorSocketId, author, messageContent, isAuthor, receiverSocketId } =
+    messageData;
+
+  const messagesContainer = isAuthor
+    ? document.getElementById(`${receiverSocketId}-messages`)
+    : document.getElementById(`${authorSocketId}-messages`);
+
+  if (messagesContainer) {
+    const data = {
+      messageContent,
+      alignRight: isAuthor ? true : false,
+    };
+
+    const message = elements.getDirectChatMessage(data);
+    messagesContainer.appendChild(message);
+  }
+};
+
+const removeChatboxOfDisconnectedPeer = (data) => {
+  const { disconnected } = data;
+
+  const activeChat = store.getActiveChatboxes();
+  const removeDisconnectChatbox = activeChat.filter(
+    (box) => box.socketId !== disconnected
+  );
+  store.setActiveChatboxes(removeDisconnectChatbox);
+
+  // ChatboxId -> remove from HTML
+  const chatbox = document.getElementById(disconnected);
+  if (chatbox) {
+    chatbox.parentElement.removeChild(chatbox);
+  }
+};
+
+const createRoomChatbox = () => {
+  const roomId = store.getRoomId();
+  if (typeof roomId === "undefined") return;
+
+  const chatboxLabel = roomId;
+  const chatboxId = roomId;
+  const chatboxMessagesId = `${roomId}-messages`;
+  const chatboxInputId = `${roomId}-input`;
+
+  const data = {
+    chatboxLabel,
+    chatboxId,
+    chatboxMessagesId,
+    chatboxInputId,
+  };
+
+  const chatbox = elements.getChatbox(data);
+  const chatboxContainer = document.querySelector(".chatboxes_container");
+  chatboxContainer.appendChild(chatbox);
+
+  const newMessageInput = document.getElementById(chatboxInputId);
+  newMessageInput.addEventListener("keydown", (event) => {
+    const key = event.key;
+
+    if (key === "Enter") {
+      const writer = store.getUsername();
+      const message = event.target.value;
+      const authorSocketId = store.getSocketId();
+
+      const data = {
+        writer,
+        message,
+        authorSocketId,
+        roomId,
+      };
+
+      // send message to socket.io server
+      socketHandler.sendRoomMessage(data);
+      newMessageInput.value = "";
+    }
+  });
+};
+
+const appendRoomChatMessage = (data) => {
+  const { roomId } = data;
+  const messages = document.getElementById(`${roomId}-messages`);
+  messages.appendChild(elements.getGroupChatMessage(data));
+};
+
 export default {
   goToChatPage,
-  appendGroupChatMessage,
   updateActiveChatboxes,
+  removeChatboxOfDisconnectedPeer,
   createNewUserChatbox,
+  appendGroupChatMessage,
+  appendDirectChatMessage,
+  createRoomChatbox,
+  appendRoomChatMessage,
 };

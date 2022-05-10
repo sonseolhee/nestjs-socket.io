@@ -10,6 +10,11 @@ nameInput.addEventListener("keyup", (event) => {
   store.setUsername(event.target.value);
 });
 
+const roomselect = document.getElementById("room_select");
+roomselect.addEventListener("change", (event) => {
+  store.setRoomId(event.target.value);
+});
+
 const chatPageButton = document.getElementById("enter_chats_button");
 chatPageButton.addEventListener("click", () => {
   // create groupchat box

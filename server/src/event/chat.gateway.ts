@@ -12,7 +12,7 @@ import {
 } from '@nestjs/websockets';
 
 @WebSocketGateway(80, {
-  cors: { origin: 'http://127.0.0.1:5501', credentials: true },
+  cors: { origin: 'http://127.0.0.1:5500', credentials: true },
 })
 export class ChatGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
@@ -23,16 +23,19 @@ export class ChatGateway
   @WebSocketServer()
   server: Server;
 
+  // # new user
   @SubscribeMessage('register-new-user')
   handleNewUser(@ConnectedSocket() socket: Socket, @MessageBody() data) {
-    console.log(this.connectedPeer);
     const user = {
       username: data.username,
       socketId: socket.id,
+      roomId: data.roomId,
     };
+    console.log(user);
+
+    socket.join(data.roomId);
 
     this.connectedPeer = [...this.connectedPeer, user];
-
     this.server.emit('active-peers', { connectedPeers: this.connectedPeer });
   }
 
@@ -49,9 +52,11 @@ export class ChatGateway
   @SubscribeMessage('direct-chat-message')
   handleDirectMessage(@ConnectedSocket() socket: Socket, @MessageBody() data) {
     const { receiverSocketId } = data;
-    const connectPeer = this.connectedPeer.find((peer) => {
-      peer.socketId === receiverSocketId;
+
+    const connectPeer = this.connectedPeer.filter((peer) => {
+      return peer.socketId === receiverSocketId;
     });
+
     if (connectPeer) {
       const authorData = {
         ...data,
@@ -60,7 +65,13 @@ export class ChatGateway
       socket.emit('direct-chat-message', authorData); // only emit to author
       this.server.to(receiverSocketId).emit('direct-chat-message', data); // only to receiver
     }
-    // return { event: 'direct-chat-message', data };
+  }
+
+  // # Room-chat
+  @SubscribeMessage('room-message')
+  hanldeRoomMessage(@MessageBody() data: any) {
+    const { roomId } = data;
+    this.server.to(roomId).emit('room-message', data);
   }
 
   afterInit(server: any) {
@@ -73,5 +84,15 @@ export class ChatGateway
 
   handleDisconnect(client: any) {
     this.logger.log('Client Disconnected', client.id);
+
+    this.connectedPeer = this.connectedPeer.filter(
+      (peer) => peer.socketId !== client.id,
+    );
+
+    const data = {
+      disconnected: client.id,
+    };
+
+    this.server.emit('peer-disconnected', data);
   }
 }
